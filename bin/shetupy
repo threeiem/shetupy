@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+
+# Globals
+PY_TAGS=""
+
+declare -A INPUT=(
+  [VERSION]="3.7.3" 
+  [PREFIX]="/usr/local/bin" 
+)
+
+declare -A line=(
+  [thin]="----------------------------------------------------------------"
+  [thik]="================================================================"
+)
+
+
+
+init() {
+  cd "${0%/*}/../archive"
+  
+  if [[ -d cpython ]]; then
+  
+    echo "Updating python..."
+  
+    cd cpython
+  
+    if [[ -f "Makefile" ]]; then
+      make clean
+    fi
+  
+    git pull origin
+  
+  else
+  
+    echo "Downloading python..."
+  
+    git clone git@github.com:python/cpython.git
+    cd cpython
+  
+  fi
+  
+  git fetch --tags --force
+  PY_TAGS=$(git tag --list)
+}
+
+checkTag() {
+
+  local input
+
+  if [[ "${1}" =~ ^[v] ]]; then
+    input="${1}"
+  else
+    input="v${1}"
+  fi
+
+  for tag in $PY_TAGS;
+  do
+
+    if [ "${tag}" == "${input}" ]; then
+      echo ${tag}
+      return 0
+    fi
+
+  done
+
+  echo "Didn't find version ${input} :-("
+}
+
+askVersion(){
+
+  while [ -z "${NEVER_LOGOFF}" ]; do
+
+    read -p "What version of python?": readInput
+    read -p "${readInput} (y/N)" -r
+
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      INPUT[VERSION]="${readInput}"
+      break
+    fi
+  done
+
+}
+
+echo
+echo "${line[thik]}"
+echo "Setup Python"
+echo "${line[thik]}"
+init
+askVersion 
+echo "Selected: ${INPUT[VERSION]}"
+checkTag ${INPUT[VERSION]}
+
