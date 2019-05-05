@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Globals
-PY_TAGS=""
+PY_VERSION=""
 
 declare -A INPUT=(
   [VERSION]="3.7.3" 
@@ -20,19 +20,16 @@ init() {
   
   if [[ -d cpython ]]; then
   
-    echo "Updating python..."
-  
     cd cpython
   
     if [[ -f "Makefile" ]]; then
       make clean
     fi
-  
+ 
+    git checkout master
     git pull origin
   
   else
-  
-    echo "Downloading python..."
   
     git clone git@github.com:python/cpython.git
     cd cpython
@@ -40,30 +37,32 @@ init() {
   fi
   
   git fetch --tags --force
-  PY_TAGS=$(git tag --list)
+
+  PY_VERSION=$(git for-each-ref \
+    --sort=taggerdate \
+    --format '%(refname) %(taggerdate)' refs/tags\
+    |cut -f1 -d\ \
+    |grep -v a[0-9]$ \
+    |grep -v b[0-9]$ \
+    |grep -v rc[0-9]$\
+    |grep ^refs/tags/v.*)
 }
 
-checkTag() {
+validateVersion() {
 
-  local input
-
-  if [[ "${1}" =~ ^[v] ]]; then
-    input="${1}"
+  if [[ "${1}" =~ ^[v][0-9].* ]]; then
+    input="refs/tags/${1}"
   else
-    input="v${1}"
+    input="refs/tags/v${1}"
   fi
 
-  for tag in $PY_TAGS;
-  do
+  for refstags in $PY_VERSION; do
 
-    if [ "${tag}" == "${input}" ]; then
-      echo ${tag}
-      return 0
+    if [ "${refstags}" == "${input}" ]; then
+      echo ${refstags}
     fi
 
   done
-
-  echo "Didn't find version ${input} :-("
 }
 
 askVersion(){
@@ -71,7 +70,7 @@ askVersion(){
   while [ -z "${NEVER_LOGOFF}" ]; do
 
     read -p "What version of python?": readInput
-    read -p "${readInput} (y/N)" -r
+    read -p "Use ${readInput} (y/N)" -r
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       INPUT[VERSION]="${readInput}"
@@ -81,12 +80,25 @@ askVersion(){
 
 }
 
+gather() {
+  askVersion 
+  version=$(validateVersion ${INPUT[VERSION]})
+
+  if [ "${version}" == "" ]; then
+    echo "FATAL: Failed to find version to install"
+  else
+    git checkout "${version}"
+    ./configure
+    make all
+  fi
+
+  #sudo make altinstall
+}
+
 echo
 echo "${line[thik]}"
 echo "Setup Python"
 echo "${line[thik]}"
-init
-askVersion 
-echo "Selected: ${INPUT[VERSION]}"
-checkTag ${INPUT[VERSION]}
 
+init
+gather
