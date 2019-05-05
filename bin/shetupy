@@ -8,7 +8,7 @@ declare -A INPUT=(
   [PREFIX]="/usr/local/bin" 
 )
 
-declare -A line=(
+declare -A LINE=(
   [thin]="----------------------------------------------------------------"
   [thik]="================================================================"
 )
@@ -96,9 +96,9 @@ gather() {
 }
 
 echo
-echo "${line[thik]}"
+echo "${LINE[thik]}"
 echo "Setup Python"
-echo "${line[thik]}"
+echo "${LINE[thik]}"
 
 init
 gather
