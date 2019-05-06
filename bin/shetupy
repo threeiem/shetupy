@@ -14,84 +14,132 @@ declare -A LINE=(
 )
 
 
-
-init() {
-  cd "${0%/*}/../archive"
-  
-  if [[ -d cpython ]]; then
-  
-    cd cpython
-  
-    if [[ -f "Makefile" ]]; then
-      make clean
-    fi
- 
-    git checkout master
-    git pull origin
-  
-  else
-  
-    git clone git@github.com:python/cpython.git
-    cd cpython
-  
-  fi
-  
-  git fetch --tags --force
-
+loadPythonVersions() {
   PY_VERSION=$(git for-each-ref \
     --sort=taggerdate \
     --format '%(refname) %(taggerdate)' refs/tags\
     |cut -f1 -d\ \
-    |grep -v a[0-9]$ \
-    |grep -v b[0-9]$ \
-    |grep -v rc[0-9]$\
+    |grep -v a[0-9]*$ \
+    |grep -v b[0-9]*$ \
+    |grep -v c[0-9]*$ \
+    |grep -v d[0-9]*$ \
+    |grep -v rc[0-9]*$ \
     |grep ^refs/tags/v.*)
 }
 
-validateVersion() {
 
-  if [[ "${1}" =~ ^[v][0-9].* ]]; then
-    input="refs/tags/${1}"
-  else
-    input="refs/tags/v${1}"
+latestMajorVersion(){
+
+  version=()
+
+  if [[ "${1}" =~ ^[0-9][\.|0-9|$]*$ ]]; then
+    majorVersion="${1}"
   fi
 
   for refstags in $PY_VERSION; do
+    if [[ "${refstags}" =~ "refs/tags/v${majorVersion}".* ]]; then
+      version+=("${refstags#regs/tags/v}")
+    fi
+  done
 
-    if [ "${refstags}" == "${input}" ]; then
-      echo ${refstags}
+  if [[ "${version[@]}" > 0 ]]; then
+    echo "${version[-1]}"
+  fi
+}
+
+
+validateVersion() {
+
+  version=$(latestMajorVersion "${1}")
+
+  for refstags in $PY_VERSION; do
+
+    if [ "${refstags}" == "${version}" ]; then
+      echo "${refstags}"
     fi
 
   done
 }
 
+# Asks the user for the version number to install.
 askVersion(){
+
+  default="y"
 
   while [ -z "${NEVER_LOGOFF}" ]; do
 
     read -p "What version of python?": readInput
-    read -p "Use ${readInput} (y/N)" -r
+    read -e -p "Use ${readInput} (Y/n/q)" readConfirm
+    readConfirm="${readConfirm:-${default}}"
 
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [[ $readConfirm =~ ^[Yy]$ ]]; then
       INPUT[VERSION]="${readInput}"
       break
     fi
-  done
 
+  done
 }
 
-gather() {
-  askVersion 
+# Setup archive for source code
+init(){
+
+  cd "${0%/*}/../archive"
+  
+  if [[ -d cpython ]]; then
+
+    #TODO Decode the state of the repository and updated
+    echo "init() Removing existing repository - tag state unknown."
+    rm -rf cpython
+
+  fi
+ 
+  echo "init() making new cpython directory"
+  mkdir cpython
+  echo "init() changing directory to cpython"
+  cd cpython
+
+  echo "init() cloning git repo"
+  git clone git@github.com:python/cpython.git .
+  echo "init() fetching git tags"
+  git fetch --tags --force
+ 
+  loadPythonVersions
+}
+
+# Curate user input
+gather(){
+
+  if [[ "${1}" == "" ]]; then
+    askVersion
+  else
+
+    if [[ "${1}" =~ ^[-][-][p][r][e][f][i][x][=].* ]]; then
+      INPUT[PREFIX]="${1}"
+    else
+
+      INPUT[VERSION]="${1}"
+
+      if [[ "${2}" =~ ^[-][-][p][r][e][f][i][x][=].* ]]; then
+        INPUT[PREFIX]="${2}"
+      fi
+    fi
+  fi
+
   version=$(validateVersion ${INPUT[VERSION]})
 
   if [ "${version}" == "" ]; then
     echo "FATAL: Failed to find version to install"
   else
+
     git checkout "${version}"
-    ./configure
+    # TODO Honor --prefix from command line.
+    ./configure --prefix="${INPUT[PREFIX]}" --enable-optimizations
     make all
+
   fi
 
+  echo "cd archive/cpython/"
+  echo "make altinstall"
   #sudo make altinstall
 }
 
@@ -101,4 +149,4 @@ echo "Setup Python"
 echo "${LINE[thik]}"
 
 init
-gather
+gather ${1}
