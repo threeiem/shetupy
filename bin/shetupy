@@ -5,7 +5,7 @@ PY_VERSION=""
 
 declare -A INPUT=(
   [VERSION]="3.7.3" 
-  [PREFIX]="/usr/local/bin" 
+  [PREFIX]="/usr/local" 
 )
 
 declare -A LINE=(
@@ -61,7 +61,14 @@ validateVersion() {
   done
 }
 
-# Asks the user for the version number to install.
+
+validatePrefix() {
+  if [  -d "${INPUT[PREFIX]}" ]; then
+    echo "${INPUT[PREFIX]}"
+  fi
+}
+
+
 askVersion(){
 
   default="y"
@@ -80,73 +87,97 @@ askVersion(){
   done
 }
 
-# Setup archive for source code
-init(){
 
-  cd "${0%/*}/../archive"
-  
+cleanUp(){
+
   if [[ -d cpython ]]; then
 
     #TODO Decode the state of the repository and updated
-    echo "init() Removing existing repository - tag state unknown."
+    #echo "init() Removing existing repository - tag state unknown."
     rm -rf cpython
 
   fi
  
-  echo "init() making new cpython directory"
   mkdir cpython
-  echo "init() changing directory to cpython"
-  cd cpython
-
-  echo "init() cloning git repo"
-  git clone git@github.com:python/cpython.git .
-  echo "init() fetching git tags"
-  git fetch --tags --force
- 
-  loadPythonVersions
 }
 
-# Curate user input
+
+getCode(){
+  git clone git@github.com:python/cpython.git .
+  git fetch --tags --force
+}
+
+
 gather(){
 
   if [[ "${1}" == "" ]]; then
     askVersion
   else
-
     if [[ "${1}" =~ ^[-][-][p][r][e][f][i][x][=].* ]]; then
       INPUT[PREFIX]="${1}"
     else
-
       INPUT[VERSION]="${1}"
+    fi
+  fi
 
-      if [[ "${2}" =~ ^[-][-][p][r][e][f][i][x][=].* ]]; then
-        INPUT[PREFIX]="${2}"
-      fi
+  if [[ "${2}" != "" ]]; then
+    if [[ "${2}" =~ ^[-][-][p][r][e][f][i][x][=].* ]]; then
+      INPUT[PREFIX]="${2}"
+    else
+      INPUT[VERSION]="${2}"
     fi
   fi
 
   version=$(validateVersion ${INPUT[VERSION]})
+  prefix=$(validatePrefix ${INPUT[PREFIX]})
 
   if [ "${version}" == "" ]; then
-    echo "FATAL: Failed to find version to install"
+    echo "FAILBOAT: Invalid version ex.) 3"
+    exit
   else
-
-    git checkout "${version}"
-    # TODO Honor --prefix from command line.
-    ./configure --prefix="${INPUT[PREFIX]}" --enable-optimizations
-    make all
-
+    INPUT[VERSION]="${version}"
   fi
 
-  echo "cd archive/cpython/"
-  echo "make altinstall"
-  #sudo make altinstall
+  if [ "${prefix}" == "" ]; then
+    echo "FAILBOAT: Invalid --prefix="
+    exit
+  else
+    INPUT[PREFIX]="${prefix}"
+  fi
+
+  echo "Version: ${INPUT[VERSION]}"
+  echo "Prefix: ${INPUT[PREFIX]}"
 }
 
-echo
-echo "${LINE[thik]}"
-echo "Setup Python"
-echo "${LINE[thik]}"
+install(){
+  git checkout "${version}"
+  ./configure --prefix="${INPUT[PREFIX]}" --enable-optimizations
+  make all
+  sudo make altinstall
+}
 
-init
-gather ${1}
+banner(){
+
+  if [[ ! "${1}" =~ ^[0-9][\.|0-9|r|a|b|c|$]* ]]; then
+    echo
+    echo "${LINE[thik]}"
+    echo "Setup Python"
+    echo "${LINE[thik]}"
+  fi
+}
+
+init(){
+
+  cd "${0%/*}/../archive"
+
+#  cleanUp
+
+  cd cpython
+
+  getCode
+  loadPythonVersions
+  gather ${1} ${2}
+}
+
+init ${1} ${2}
+install
